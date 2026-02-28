@@ -5,6 +5,25 @@ import torch
 import torch.distributed as dist
 import argparse
 import os
+from models.dynamic_shard_loader import DynamicShardLoader, ShardType
+
+mapping = {
+    "embed_tokens": {"name": "embed", "shard_type": [(ShardType.NONE,)]},
+    "input_layernorm": {"name": "attn_norm", "shard_type": [(ShardType.NONE,)]},
+    "q_proj" : {"name": "wq", "shard_type": [(ShardType.COL_PARALLEL,)]},
+	"q_norm" : {"name": "wq", "shard_type": [(ShardType.NONE,)]}, 
+    "k_proj": {"name": "wk", "shard_type": [(ShardType.COL_PARALLEL,)]},
+    "k_norm": {"name": "wk", "shard_type": [(ShardType.NONE,)]},
+    "v_proj": {"name": "wv", "shard_type": [(ShardType.COL_PARALLEL,)]},
+	"o_proj" : {"name": "wo", "shard_type": [(ShardType.ROW_PARALLEL)]},
+    "post_attention_layernorm": {"name": "post_norm", "shard_type": [(ShardType.NONE)]}, 
+	"gate": {"name": "gate", "shard_type": [(ShardType.NONE)]}, # router gate
+	"gate_proj": {"name": "w1", "shard_type": [(ShardType.COL_PARALLEL), (ShardType.EXPERT_PARALLEL, 1)]}, # for now, EP is set to 1 (all experts on all GPUs).
+	"down_proj": {"name": "w2", "shard_type": [(ShardType.ROW_PARALLEL), (ShardType.EXPERT_PARALLEL, 1)]}, 
+	"up_proj": {"name": "w3", "shard_type": [(ShardType.COL_PARALLEL), (ShardType.EXPERT_PARALLEL, 1)]}, 
+    "norm": {"name": "norm", "shard_type": [(ShardType.NONE)]},
+    "lm_head": {"name": "head", "shard_type": [(ShardType.NONE)]}
+}
 
 # print limitation
 # torch.set_printoptions(threshold=2000)
@@ -104,9 +123,9 @@ if __name__ == "__main__":
 
     if world_size > 1:
         dist.init_process_group(backend="nccl", init_method="env://")
-    global print
-    if rank != 0:
-        print = lambda *_, **__: None
+    # global print
+    # if rank != 0:
+    #     print = lambda *_, **__: None
 
     print("Input arguments:", args)
     print(f"world_size({world_size}) rank({rank})")
@@ -114,18 +133,45 @@ if __name__ == "__main__":
     torch.set_default_dtype(torch.bfloat16)
 
     torch.cuda.set_device(rank)
-    with torch.device("cuda"):
-        if args.model_path is not None:
-            # load model locally (necessary for multi-GPU case)
-            print(f"Load model from model path: {args.model_path}")
-            config = AutoConfig.from_pretrained(args.model_path)
+    # with torch.device("cuda"):
+    #     if args.model_path is not None:
+    #         # load model locally (necessary for multi-GPU case)
+    #         print(f"Load model from model path: {args.model_path}")
+    #         config = AutoConfig.from_pretrained(args.model_path)
+    #         model = Qwen3MoeForCausalLM(config)
+    #         load_model(
+    #             model, f"{args.model_path}/model{rank}-mp{world_size}.safetensors"
+    #         )
+    #         tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+    #     else:
+    #         model = Qwen3MoeForCausalLM.from_pretrained(model_name).to("cuda")
+    #         tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    if args.model_path is not None or world_size == 1: 
+        with torch.device("cuda"):
+            if args.model_path is not None:
+                # load model locally
+                print(f"Load model from model path: {args.model_path}")
+                config = AutoConfig.from_pretrained(args.model_path)
+                model = Qwen3MoeForCausalLM(config)
+                load_model(
+                    model, f"{args.model_path}/model{rank}-mp{world_size}.safetensors"
+                )
+                tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+            else:
+                # Single GPU, no need for the dynamic shard loader.
+                model = Qwen3MoeForCausalLM.from_pretrained(model_name).to("cuda")
+                tokenizer = AutoTokenizer.from_pretrained(model_name)
+    else: # Use dynamic shard loader to load directly from HF and shard.
+        print("Detected multi-gpu run without a local path specified. Will be using the DynamicShardLoader class.")
+        with torch.device("meta"):
+            config = AutoConfig.from_pretrained(model_name)
             model = Qwen3MoeForCausalLM(config)
-            load_model(
-                model, f"{args.model_path}/model{rank}-mp{world_size}.safetensors"
-            )
-            tokenizer = AutoTokenizer.from_pretrained(args.model_path)
-        else:
-            model = Qwen3MoeForCausalLM.from_pretrained(model_name).to("cuda")
+
+        device = torch.device(f"cuda:{rank}")
+        loader = DynamicShardLoader(model, model_name, mapping, rank, world_size, device, download=False)
+
+        with torch.device("cuda"):
             tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     total_num_requests = 1 if not args.use_mirage else args.max_num_batched_requests
