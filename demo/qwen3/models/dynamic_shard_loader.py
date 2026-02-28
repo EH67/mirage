@@ -8,7 +8,9 @@ import json
 import math
 from enum import Enum
 import torch
-from models.modeling_qwen3 import Qwen3RotaryEmbedding
+from models.modeling_qwen3_moe import Qwen3MoeRotaryEmbedding # for qwen3-30b-a3b
+from models.modeling_qwen3 import Qwen3RotaryEmbedding # for qwen3-8b
+
 
 class ShardType(Enum):
     COL_PARALLEL = 0
@@ -281,13 +283,21 @@ class DynamicShardLoader:
         This is specific to QWEN3 implementation.  
         """
         for name, module in self.model.named_modules():
-            if isinstance(module, Qwen3RotaryEmbedding):
+            if isinstance(module, Qwen3RotaryEmbedding): # qwen3-8b
                 module.to(self.device)
                 
                 inv_freq, attention_scaling = module.rope_init_fn(
                     module.config, self.device, **module.rope_kwargs
                 )
                 
+                module.register_buffer("inv_freq", inv_freq, persistent=False)
+                module.attention_scaling = attention_scaling
+
+            if isinstance(module, Qwen3MoeRotaryEmbedding): # qwen3-30b-a3b
+                module.to(self.device)
+                inv_freq, attention_scaling = module.compute_default_rope_parameters(
+                    module.config, device=self.device
+                )
                 module.register_buffer("inv_freq", inv_freq, persistent=False)
                 module.attention_scaling = attention_scaling
 

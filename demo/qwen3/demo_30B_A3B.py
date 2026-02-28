@@ -147,7 +147,7 @@ if __name__ == "__main__":
     #         model = Qwen3MoeForCausalLM.from_pretrained(model_name).to("cuda")
     #         tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    if args.model_path is not None or world_size == 1: 
+    if args.model_path is not None or world_size == 0: 
         with torch.device("cuda"):
             if args.model_path is not None:
                 # load model locally
@@ -170,6 +170,7 @@ if __name__ == "__main__":
 
         device = torch.device(f"cuda:{rank}")
         loader = DynamicShardLoader(model, model_name, mapping, rank, world_size, device, download=False)
+        torch.cuda.synchronize()
 
         with torch.device("cuda"):
             tokenizer = AutoTokenizer.from_pretrained(model_name)
