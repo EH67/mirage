@@ -164,7 +164,7 @@ class DynamicShardLoader:
         num_experts = self.model.config.num_experts
         
         experts_per_rank = math.ceil(num_experts / expert_parallel_size)
-        ep_rank = self.rank % expert_parallel_size
+        ep_rank = self.rank // experts_per_rank
 
         expert_start = ep_rank * experts_per_rank
         expert_end = min(expert_start + experts_per_rank, num_experts)
