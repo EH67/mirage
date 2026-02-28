@@ -1,4 +1,5 @@
-from transformers import Qwen3MoeForCausalLM
+# from transformers import Qwen3MoeForCausalLM
+from models.modeling_qwen3_moe import Qwen3MoeForCausalLM
 from transformers import AutoTokenizer, AutoConfig
 from safetensors.torch import load_model
 import torch
