@@ -148,7 +148,7 @@ if __name__ == "__main__":
     #         model = Qwen3MoeForCausalLM.from_pretrained(model_name).to("cuda")
     #         tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    if args.model_path is not None or world_size == 0: 
+    if args.model_path is not None or world_size == 1: 
         with torch.device("cuda"):
             if args.model_path is not None:
                 # load model locally
