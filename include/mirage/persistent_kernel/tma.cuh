@@ -92,6 +92,12 @@ __host__ static inline void fill_tma_desc(CUtensorMap *tma_desc,
     assert(false);
   }
 
+  printf("DEBUG TMA: Tensor address = %p, dtype_size = %zu\n", global_addr, sizeof(T));
+
+  if ((reinterpret_cast<uint64_t>(global_addr) & 0b1111) != 0) {
+      printf("FATAL: TMA alignment check failed for address %p! (Needs to be 16-byte aligned)\n", global_addr);
+  }
+
   assert((reinterpret_cast<uint64_t>(global_addr) & 0b1111) ==
          0); // Address must be 16B-aligned
 

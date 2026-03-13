@@ -203,7 +203,7 @@ class DynamicShardLoader:
         if meta_tensor.size(dim) == shard_size:
             meta_shard = meta_tensor.contiguous()
         else:
-            meta_shard = meta_tensor.narrow(dim, start, shard_size).contiguous()
+            meta_shard = meta_tensor.narrow(dim, start, shard_size).clone().contiguous()
 
         if tp_type == ShardType.COL_PARALLEL:
             return weight_slice[start:end, :], meta_shard
@@ -221,7 +221,7 @@ class DynamicShardLoader:
             - weight_name (str): full weight name (ex: model.layers.0.mlp.experts.0.gate_proj.weights).
         """
         if not sharded_tensor.is_contiguous():
-            sharded_tensor = sharded_tensor.contiguous()
+            sharded_tensor = sharded_tensor.clone().contiguous()
 
         # Allocate memory for the actual tensor on the current device & copy tensor data.
         tensor = self.materialize_meta_tensor(meta_tensor, self.device)
