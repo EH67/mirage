@@ -5,7 +5,9 @@ import torch
 import torch.distributed as dist
 import argparse
 import os, json
-from models.dynamic_shard_loader import DynamicShardLoader, ShardType
+# from models.qwen3_shard_loader import Qwen3ShardLoader
+# from mirage.mpk.base_dynamic_shard_loader import ShardType
+from models.dynamic_shard_loader import Qwen3ShardLoader, ShardType
 
 mapping = {
     "embed_tokens": {"name": "embed", "shard_type": [(ShardType.NONE,)]},
@@ -18,9 +20,9 @@ mapping = {
 	"o_proj" : {"name": "wo", "shard_type": [(ShardType.ROW_PARALLEL)]},
     "post_attention_layernorm": {"name": "post_norm", "shard_type": [(ShardType.NONE)]}, 
 	"gate": {"name": "gate", "shard_type": [(ShardType.NONE)]}, # router gate
-	"gate_proj": {"name": "w1", "shard_type": [(ShardType.COL_PARALLEL, 4), (ShardType.EXPERT_PARALLEL, 1)]}, # for now, EP is set to 1 (all experts on all GPUs).
-	"down_proj": {"name": "w2", "shard_type": [(ShardType.ROW_PARALLEL, 4), (ShardType.EXPERT_PARALLEL, 1)]}, 
-	"up_proj": {"name": "w3", "shard_type": [(ShardType.COL_PARALLEL, 4), (ShardType.EXPERT_PARALLEL, 1)]}, 
+	"gate_proj": {"name": "w1", "shard_type": [(ShardType.COL_PARALLEL, )]}, 
+	"down_proj": {"name": "w2", "shard_type": [(ShardType.ROW_PARALLEL, )]}, 
+	"up_proj": {"name": "w3", "shard_type": [(ShardType.COL_PARALLEL, )]}, 
     "norm": {"name": "norm", "shard_type": [(ShardType.NONE)]},
     "lm_head": {"name": "head", "shard_type": [(ShardType.NONE)]}
 }
@@ -194,7 +196,7 @@ if __name__ == "__main__":
             model = Qwen3ForCausalLM(config, world_size, args.max_num_pages, args.page_size)
 
         device = torch.device(f"cuda:{rank}")
-        loader = DynamicShardLoader(model, model_name, mapping, rank, world_size, device, download=False)
+        loader = Qwen3ShardLoader(model, model_name, mapping, rank, world_size, device, download=False)
 
         with torch.device("cuda"):
             tokenizer = AutoTokenizer.from_pretrained(model_name)

@@ -16,7 +16,7 @@ class ShardType(Enum):
     EXPERT_PARALLEL = 2
     NONE = 100 # No sharding, replicate on all GPUs
 
-class DynamicShardLoader:
+class Qwen3ShardLoader:
     def __init__(self, model, model_name, mapping, rank, world_size, device, download=False):
         self.model = model
         self.model_name = model_name
@@ -65,6 +65,7 @@ class DynamicShardLoader:
                     
                     # Check expert parallelism.
                     if "expert" in name and ShardType.EXPERT_PARALLEL in parallelism_info:
+                        print("checking EP for", name)
                         if not self._check_expert_parallel(name, parallelism_info[ShardType.EXPERT_PARALLEL]):
                             continue
 
